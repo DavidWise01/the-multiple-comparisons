@@ -55,7 +55,7 @@ input[type=range]{accent-color:var(--k1);width:160px}
   <div class="card">
     <div class="panels">
       <div class="panel"><div class="lbl">◧ THE MEASURE · 2D</div><canvas id="c2d" class="pane" width="420" height="315"></canvas></div>
-      <div class="panel"><div class="lbl">◍ CONSENSUS · 3D · many → one</div><canvas id="c3d" class="pane" width="420" height="315"></canvas></div>
+      <div class="panel"><div class="lbl">◍ THE FIELD · 3D · false alarms go dark</div><canvas id="c3d" class="pane" width="420" height="315"></canvas></div>
     </div>
     <div class="toddler"><div class="lbl">👶 THE TODDLER CORNER — tap to bring them together</div><canvas id="ctod" width="860" height="292"></canvas></div>
     <div class="controls"><label class="rng">correction <input type="range" id="f" min="0" max="100" value="0" step="1"><b id="fv">0%</b></label></div>
@@ -87,35 +87,33 @@ window.onerror=function(m,s,l,c,e){var f=document.getElementById('fail');if(f){f
     tod:{ctx:gt,W:function(){return ct.width/DPR;},H:function(){return ct.height/DPR;}}};
   ct.addEventListener('pointerdown',function(e){e.preventDefault();env._ftar=env._ftar>0.5?0.0:1.0;});
   ct.addEventListener('touchstart',function(e){e.preventDefault();env._ftar=env._ftar>0.5?0.0:1.0;},{passive:false});
-  var GL=(function(){
+  // ---- generic dynamic-POINTS WebGL engine; each sphere supplies its OWN geometry via draw3d(env,GLP) ----
+  var GLP=(function(){
     var gl;try{gl=c3.getContext('webgl',{antialias:true,alpha:false})||c3.getContext('experimental-webgl');}catch(e){}
     if(!gl)return null;
-    var N=420, apartA=[],apartB=[],targ=[];
-    var seed=7;function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
-    for(var i=0;i<N;i++){var u=rnd()*2-1,th=rnd()*6.283,s=Math.sqrt(1-u*u),r=0.28+rnd()*0.05;
-      var tx=Math.cos(th)*s*r,ty=u*r,tz=Math.sin(th)*s*r;targ.push(tx,ty,tz);
-      apartA.push(tx-0.42,ty*0.8,tz); apartB.push(tx+0.42,ty*0.8,tz);}
-    function buf(a){var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.STATIC_DRAW);return b;}
-    var bA=buf(apartA),bB=buf(apartB),bT=buf(targ);
-    var VS='attribute vec3 a;attribute vec3 t;uniform float f,ang,asp;void main(){vec3 p=mix(a,t,f);float c=cos(ang),s=sin(ang);vec3 q=vec3(p.x*c+p.z*s,p.y,-p.x*s+p.z*c);float pz=1.0/(2.2-q.z*0.5);vec2 o=vec2(q.x,q.y)*1.5*pz;o.x/=asp;gl_Position=vec4(o,0.0,1.0);gl_PointSize=3.4;}';
-    var FS='precision mediump float;uniform vec3 col;uniform float a;void main(){vec2 d=gl_PointCoord-0.5;if(dot(d,d)>0.25)discard;gl_FragColor=vec4(col,a);}';
+    var VS='attribute vec3 a;attribute vec3 c;uniform float ang,asp,ps,tilt;varying vec3 vc;void main(){float C=cos(ang),S=sin(ang);vec3 r=vec3(a.x*C+a.z*S,a.y,-a.x*S+a.z*C);float T=cos(tilt),U=sin(tilt);vec3 q=vec3(r.x,r.y*T-r.z*U,r.y*U+r.z*T);float pz=1.0/(2.5-q.z*0.6);vec2 o=vec2(q.x,q.y)*1.7*pz;o.x/=asp;gl_Position=vec4(o,0.0,1.0);gl_PointSize=ps*pz;vc=c;}';
+    var FS='precision mediump float;varying vec3 vc;void main(){vec2 d=gl_PointCoord-0.5;if(dot(d,d)>0.25)discard;gl_FragColor=vec4(vc,0.92);}';
     function sh(ty,s){var o=gl.createShader(ty);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
     var prog;try{prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw'l';}catch(e){return null;}
-    var uF=gl.getUniformLocation(prog,'f'),uAng=gl.getUniformLocation(prog,'ang'),uAsp=gl.getUniformLocation(prog,'asp'),uCol=gl.getUniformLocation(prog,'col'),uA=gl.getUniformLocation(prog,'a');
-    var la=gl.getAttribLocation(prog,'a'),lt=gl.getAttribLocation(prog,'t');
+    var uAng=gl.getUniformLocation(prog,'ang'),uAsp=gl.getUniformLocation(prog,'asp'),uPs=gl.getUniformLocation(prog,'ps'),uTilt=gl.getUniformLocation(prog,'tilt');
+    var la=gl.getAttribLocation(prog,'a'),lc=gl.getAttribLocation(prog,'c');
+    var pbuf=gl.createBuffer(),cbuf=gl.createBuffer();
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-    function hex(h){h=h.replace('#','');return [parseInt(h.substr(0,2),16)/255,parseInt(h.substr(2,2),16)/255,parseInt(h.substr(4,2),16)/255];}
-    function mixc(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
-    function drawCloud(base,col){gl.bindBuffer(gl.ARRAY_BUFFER,base);gl.enableVertexAttribArray(la);gl.vertexAttribPointer(la,3,gl.FLOAT,false,0,0);
-      gl.bindBuffer(gl.ARRAY_BUFFER,bT);gl.enableVertexAttribArray(lt);gl.vertexAttribPointer(lt,3,gl.FLOAT,false,0,0);
-      gl.uniform3f(uCol,col[0],col[1],col[2]);gl.uniform1f(uA,0.85);gl.drawArrays(gl.POINTS,0,N);}
-    return {resize:function(){gl.viewport(0,0,c3.width,c3.height);},
-      draw:function(f,ang,col1,col2){gl.viewport(0,0,c3.width,c3.height);gl.clearColor(0.059,0.086,0.125,1);gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.useProgram(prog);gl.uniform1f(uF,f);gl.uniform1f(uAng,ang);gl.uniform1f(uAsp,c3.width/c3.height);
-        var c1=hex(col1),c2c=hex(col2),blended=mixc(c1,c2c,0.5);
-        drawCloud(bA,mixc(c1,blended,f));drawCloud(bB,mixc(c2c,blended,f));}};
+    function hx(h){h=(''+h).replace('#','');return [parseInt(h.substr(0,2),16)/255,parseInt(h.substr(2,2),16)/255,parseInt(h.substr(4,2),16)/255];}
+    return {hex:hx,
+      clear:function(){gl.viewport(0,0,c3.width,c3.height);gl.clearColor(0.05,0.07,0.11,1);gl.clear(gl.COLOR_BUFFER_BIT);},
+      points:function(pos,col,ang,size,tilt){if(!pos.length)return;gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER,pbuf);gl.bufferData(gl.ARRAY_BUFFER,pos instanceof Float32Array?pos:new Float32Array(pos),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(la);gl.vertexAttribPointer(la,3,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,cbuf);gl.bufferData(gl.ARRAY_BUFFER,col instanceof Float32Array?col:new Float32Array(col),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lc);gl.vertexAttribPointer(lc,3,gl.FLOAT,false,0,0);
+        gl.uniform1f(uAng,ang||0);gl.uniform1f(uAsp,c3.width/c3.height);gl.uniform1f(uPs,size||3.4);gl.uniform1f(uTilt,tilt==null?0.35:tilt);
+        gl.drawArrays(gl.POINTS,0,(pos.length)/3);}};
   })();
-  if(!GL){var f=document.getElementById('fail');if(f){f.style.display='block';f.textContent='WebGL unavailable — 3D corner disabled';}}
+  if(!GLP){var f=document.getElementById('fail');if(f){f.style.display='block';f.textContent='WebGL unavailable — 3D corner disabled';}}
+  // fallback geometry (only for spheres that have not yet supplied a bespoke draw3d)
+  function defaultGeom(env,GLP){var n=360,pos=[],col=[],c1=GLP.hex(window.__INST__.col1||'#9a7cff'),f=env.fused,seed=7;
+    function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+    for(var i=0;i<n;i++){var u=rnd()*2-1,th=rnd()*6.283,s=Math.sqrt(1-u*u),r=0.3;pos.push(Math.cos(th)*s*r,u*r,Math.sin(th)*s*r);col.push(c1[0],c1[1],c1[2]);}
+    GLP.points(pos,col,env.t*0.4,3.4);}
   var t0=null,inited=false;
   function loop(t){requestAnimationFrame(loop);if(t0===null)t0=t;env.t=(t-t0)*0.001;
     env.fused+=(env._ftar-env.fused)*0.09;
@@ -123,7 +121,7 @@ window.onerror=function(m,s,l,c,e){var f=document.getElementById('fail');if(f){f
     var I=window.__INST__;if(!I)return;
     g2.setTransform(DPR,0,0,DPR,0,0); if(I.draw2d)I.draw2d(env);
     gt.setTransform(DPR,0,0,DPR,0,0); if(I.drawTod)I.drawTod(env);
-    if(GL)GL.draw(env.fused, env.t*0.4, I.col1||'#9a7cff', I.col2||'#e0774f');
+    if(GLP){GLP.clear(); if(I.draw3d)I.draw3d(env,GLP); else defaultGeom(env,GLP);}
   }
   requestAnimationFrame(loop);
   window.__ENV__=env;
@@ -164,6 +162,11 @@ window.onerror=function(m,s,l,c,e){var f=document.getElementById('fail');if(f){f
     var cx=px0+f*pw,cy=py0-fwer(f)*ph;c.fillStyle='#e0774f';c.beginPath();c.arc(cx,cy,5,0,7);c.fill();
     c.fillStyle='#9aa';c.font='9px ui-monospace,monospace';c.textAlign='center';c.fillText('none → Bonferroni',px0+pw/2,py0+14);c.textAlign='left';c.fillText('FWER',px0+3,py0-ph+2);
     env.set('roA',aeff(f).toExponential(1),'p');env.set('roP',(fwer(f)*100).toFixed(1)+'%',fwer(f)<0.1?'g':'q');env.set('roE',(m*aeff(f)).toFixed(2),fwer(f)<0.1?'g':'q');},
+  draw3d:function(env,GLP){ // bespoke: a FIELD of test-columns; the red false-alarm columns collapse as you correct
+    var f=env.fused,pos=[],col=[],m=20,ef=m*(0.05*(1-f)+(0.05/m)*f);
+    for(var i=0;i<m;i++){var gx=((i%5)/4-0.5)*0.92,gz=((Math.floor(i/5))/3-0.5)*0.72,alarm=(i<ef),hh=alarm?0.52:0.13,K=Math.max(3,Math.round(hh*30));
+      for(var k=0;k<K;k++){pos.push(gx,-0.42+(k/(K-1))*hh,gz);if(alarm)col.push(0.88,0.35,0.2);else col.push(0.5,0.42,0.78);}}
+    GLP.points(pos,col,env.t*0.28,3.6,0.38);},
   drawTod:function(env){drawToddler(env,'#e0774f','#9a7cff','NOISE','ALARMS','CONTROLLED');}
  };
 })();
