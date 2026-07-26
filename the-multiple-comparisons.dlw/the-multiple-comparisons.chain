@@ -1,0 +1,9 @@
+ROOT0-DLW-CHAIN-v1
+index : 1582
+slug  : the-multiple-comparisons
+seal  : 39c41fe30f8c9fdf41dde2c087ed244ec6cfd63ebd0c03497760c71b4262fbc4
+prev  : ffd072d4a3b522eba9f1a4e6ab61d64d847f2f577d69dd639245cca55b4749d9
+link  : 8350b742ccb6be9bdb188d0d28234b8a375acdf99f46fec684b0db8bf9941156
+head  : 8350b742ccb6be9bdb188d0d28234b8a375acdf99f46fec684b0db8bf9941156
+
+— the tether: link = sha256(index|slug|seal|prev). the chain head commits to the whole corpus.
